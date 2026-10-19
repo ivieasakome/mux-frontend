@@ -3,6 +3,8 @@ import React from 'react';
 import { criticalComponentFixtures } from '../src/mocks/wallet-fixtures';
 import NoMockWallets from '../src/components/NoMockWallets';
 import OfflineBanner from '../src/components/OfflineBanner';
+import NetworkBadge from '../src/components/NetworkBadge';
+import PrivacyMode from '../src/components/PrivacyMode';
 
 interface CriticalComponentProps {
   id: string;
@@ -96,4 +98,55 @@ export const NotificationsEmptyReference: Story = {
     lastModified: '2026-09-26',
   },
 };
+
+// NetworkBadge carries a documented WCAG contrast contract and must fail
+// closed on unknown networks. Render every network so the visual contract is
+// built in CI (contrast assertions live in the unit test).
+export const NetworkBadgeMainnet: Story = {
+  name: 'NetworkBadge/Mainnet',
+  render: () => <NetworkBadge network="mainnet" />,
+};
+
+export const NetworkBadgeTestnet: Story = {
+  name: 'NetworkBadge/Testnet',
+  render: () => <NetworkBadge network="testnet" />,
+};
+
+export const NetworkBadgeFuturenet: Story = {
+  name: 'NetworkBadge/Futurenet',
+  render: () => <NetworkBadge network="futurenet" />,
+};
+
+export const NetworkBadgeUnknown: Story = {
+  name: 'NetworkBadge/Unknown',
+  render: () => <NetworkBadge network="unknown" />,
+};
+
+// PrivacyMode's hidden state is a documented privacy contract; render both
+// states with a small fixed balances array so CI builds them.
+const privacyModeBalances = [
+  { asset: 'XLM', balance: '100.00' },
+  { asset: 'USDC', balance: '25.50' },
+];
+
+export const PrivacyModeVisible: Story = {
+  name: 'PrivacyMode/Visible',
+  render: () => (
+    <PrivacyMode
+      balances={privacyModeBalances}
+      isAuthenticated
+      initialHidden={false}
+    />
+  ),
+};
+
+export const PrivacyModeHidden: Story = {
+  name: 'PrivacyMode/Hidden',
+  render: () => (
+    <PrivacyMode
+      balances={privacyModeBalances}
+      isAuthenticated
+      initialHidden
+    />
+  ),
 };
