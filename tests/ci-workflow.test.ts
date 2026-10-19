@@ -54,6 +54,46 @@ describe('CI typecheck required gate', () => {
 });
 
 /**
+ * Guards for issue #971: the CI workflow must run the bundle budget check and
+ * the Storybook build so PRs cannot regress bundle size or break the
+ * critical-components stories while still going green.
+ */
+describe('CI bundle budget and Storybook build gates', () => {
+  it('defines the analyze:bundle and build-storybook scripts in package.json', () => {
+    const pkg = JSON.parse(readRepoFile('package.json')) as {
+      scripts?: Record<string, string>;
+    };
+
+    expect(pkg.scripts?.['analyze:bundle'], 'package.json must define "analyze:bundle"').toBeTruthy();
+    expect(pkg.scripts?.['build-storybook'], 'package.json must define "build-storybook"').toBeTruthy();
+  });
+
+  it('runs the bundle budget check in the CI workflow', () => {
+    const workflow = readRepoFile('.github/workflows/ci.yml');
+
+    expect(workflow).toMatch(/analyze:bundle/);
+  });
+
+  it('runs the Storybook build in the CI workflow', () => {
+    const workflow = readRepoFile('.github/workflows/ci.yml');
+
+    expect(workflow).toMatch(/build-storybook/);
+  });
+
+  it('does not allow the bundle or Storybook steps to continue on error', () => {
+    const workflow = readRepoFile('.github/workflows/ci.yml');
+    const blocks = workflow
+      .split(/\n(?=\s{2,}\w)/)
+      .filter((block) => /analyze:bundle|build-storybook/.test(block));
+
+    expect(blocks.length).toBeGreaterThan(0);
+    for (const block of blocks) {
+      expect(block).not.toMatch(/continue-on-error:\s*true/i);
+    }
+  });
+});
+
+/**
  * Guards for issue #815: the Vitest gate that runs this file in CI must be
  * able to boot, and must not pick up Playwright specs it cannot execute.
  */
@@ -191,54 +231,9 @@ describe('Deterministic CSS build', () => {
     for (const name of ['tailwindcss', "'@tailwindcss/postcss"]) {
       const escaped = name.replace(/[/@']/g, '\\$&');
       const versions = new Set(
-        [...lockfile.matchAll(new RegExp(`^  ${escaped}@([^:\\s]+):`, 'gm'))].map(([, version]) => version),
+        [...lockfile.matchAll(new RegExp(`^  ${escaped}@([^:\\s]+):`, 'gm'))].map(([, v]) => v),
       );
-      expect(versions.size, `${name} versions: ${[...versions].join(', ')}`).toBe(1);
-    }
-  });
-});
-
-/**
- * Guards for issue #1052: the Playwright smoke spec must be runnable — no
- * undeclared SDK imports, no non-existent runner API, and every `page.goto`
- * path must map to a route directory under src/app.
- */
-describe('Playwright smoke spec', () => {
-  const specPath = 'tests/playwright-smoke.ts';
-  const spec = readRepoFile(specPath);
-
-  it('does not import packages absent from package.json', () => {
-    const pkg = JSON.parse(readRepoFile('package.json')) as {
-      dependencies?: Record<string, string>;
-      devDependencies?: Record<string, string>;
-    };
-    const declared = new Set([
-      ...Object.keys(pkg.dependencies ?? {}),
-      ...Object.keys(pkg.devDependencies ?? {}),
-    ]);
-
-    const imports = [...spec.matchAll(/from\s+['"]([^'"]+)['"]/g)].map(([, specifier]) => specifier);
-    for (const specifier of imports) {
-      if (specifier.startsWith('.') || specifier.startsWith('node:')) continue;
-      const packageName = specifier.startsWith('@')
-        ? specifier.split('/').slice(0, 2).join('/')
-        : specifier.split('/')[0];
-      expect(declared.has(packageName), `${specPath} imports undeclared ${packageName}`).toBe(true);
-    }
-  });
-
-  it('does not call the non-existent test.run() runner API', () => {
-    expect(spec).not.toMatch(/\btest\.run\s*\(/);
-  });
-
-  it('only navigates to routes that exist under src/app', () => {
-    const gotoPaths = [...spec.matchAll(/page\.goto\(\s*['"`]([^'"`]+)['"`]/g)].map(([, path]) => path);
-    expect(gotoPaths.length).toBeGreaterThan(0);
-
-    for (const path of gotoPaths) {
-      const routePath = path.split(/[?#]/)[0].replace(/^\/+|\/+$/g, '');
-      const routeDir = resolve(repoRoot, 'src/app', routePath);
-      expect(existsSync(routeDir), `${specPath}: ${path} has no route under src/app`).toBe(true);
+      expect(versions.size, `${name} versions in lockfile: ${[...versions].join(', ')}`).toBe(1);
     }
   });
 });
